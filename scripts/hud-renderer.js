@@ -3,7 +3,9 @@ import {
   I18N_PREFIX,
   DEFAULT_POSITIONS,
   ROLEPLAY_POSITIONS,
-  escapeHtml
+  escapeHtml,
+  sanitizeUrl,
+  clampNumber
 } from "./constants.js";
 import {
   extractActorData,
@@ -268,9 +270,11 @@ export class KorujaStreamHUD {
       };
     }
 
-    const temp = document.createElement("div");
-    temp.innerHTML = message.content || "";
-    const plain = temp.textContent?.trim();
+    const parsedDoc = new DOMParser().parseFromString(
+      String(message.content || ""),
+      "text/html"
+    );
+    const plain = (parsedDoc.body?.textContent ?? "").trim();
     if (!plain) return null;
     const truncated = plain.length > 90 ? `${plain.slice(0, 87)}...` : plain;
     return { author, html: escapeHtml(truncated), type: "" };
@@ -324,16 +328,18 @@ export class KorujaStreamHUD {
     const descriptors = actors.map((actor, index) => {
       const slotKey = `p${index + 1}`;
       const coords = pos[slotKey] || DEFAULT_POSITIONS[slotKey];
+      const cx = Number(coords.x) || 0;
+      const cy = Number(coords.y) || 0;
       const sc = slotConfigs[actor.id] || { mode: "transparent", url: "" };
       const camBox = isRoleplay
-        ? { x: coords.x, y: coords.y - 252, w: 440, h: 248 }
-        : { x: coords.x, y: coords.y - 110, w: 222, h: 106 };
+        ? { x: cx, y: cy - 252, w: 440, h: 248 }
+        : { x: cx, y: cy - 110, w: 222, h: 106 };
       return {
         actorId: actor.id,
         name: actor.name,
-        img: actor.img,
+        img: sanitizeUrl(actor.img, { allowRelative: true }),
         mode: sc.mode || "transparent",
-        url: (sc.url || "").trim(),
+        url: sanitizeUrl((sc.url || "").trim(), { allowRelative: false }),
         camBox
       };
     });
@@ -344,7 +350,7 @@ export class KorujaStreamHUD {
 
     this.mediaLayer.innerHTML = descriptors
       .map((d) => {
-        const style = `left:${d.camBox.x}px; top:${d.camBox.y}px; width:${d.camBox.w}px; height:${d.camBox.h}px;`;
+        const style = `left:${Number(d.camBox.x) || 0}px; top:${Number(d.camBox.y) || 0}px; width:${Number(d.camBox.w) || 0}px; height:${Number(d.camBox.h) || 0}px;`;
         if (d.mode === "iframe" && d.url) {
           return `
             <div class="ksh-media-slot is-iframe" style="${style}">
@@ -378,7 +384,9 @@ export class KorujaStreamHUD {
     document.body.classList.toggle("koruja-stream-roleplay-mode", isRoleplayMode);
     this.container.className = `theme-${theme} mode-${overlayMode}${isRoleplayMode ? " is-roleplay-mode" : ""}`;
 
-    const customOverlayImg = getSetting("customOverlayImg") || "";
+    const customOverlayImg = sanitizeUrl(getSetting("customOverlayImg") || "", {
+      allowRelative: true
+    });
     const showPrimary = Boolean(getSetting("showPrimaryBar"));
     const showSecondary = Boolean(getSetting("showSecondaryBar"));
     const showTertiary = Boolean(getSetting("showTertiaryBar"));
@@ -443,7 +451,9 @@ export class KorujaStreamHUD {
       const cutouts = ["p1", "p2", "p3", "p4", "p5", "p6"]
         .map((k) => {
           const p = pos[k] || DEFAULT_POSITIONS[k];
-          return `<div class="koruja-cutout koruja-cutout-player" style="left:${p.x}px; top:${p.y - 110}px; width:222px; height:106px;"></div>`;
+          const px = Number(p.x) || 0;
+          const py = Number(p.y) || 0;
+          return `<div class="koruja-cutout koruja-cutout-player" style="left:${px}px; top:${py - 110}px; width:222px; height:106px;"></div>`;
         })
         .join("");
       backdropHtml = `
@@ -460,7 +470,9 @@ export class KorujaStreamHUD {
       const rpCutouts = ["p1", "p2", "p3", "p4", "p5", "p6"]
         .map((k) => {
           const p = pos[k] || ROLEPLAY_POSITIONS[k];
-          return `<div class="koruja-cutout koruja-cutout-rp" style="left:${p.x}px; top:${p.y - 252}px; width:440px; height:248px;"></div>`;
+          const px = Number(p.x) || 0;
+          const py = Number(p.y) || 0;
+          return `<div class="koruja-cutout koruja-cutout-rp" style="left:${px}px; top:${py - 252}px; width:440px; height:248px;"></div>`;
         })
         .join("");
       backdropHtml = `
@@ -545,10 +557,12 @@ export class KorujaStreamHUD {
           showConditions && data.conditions?.length
             ? `<div class="ksh-effects-row">${data.conditions
                 .slice(0, 5)
-                .map(
-                  (c) =>
-                    `<img class="ksh-effect-icon" src="${escapeHtml(c.img)}" title="${escapeHtml(c.name)}" alt="${escapeHtml(c.name)}" />`
-                )
+                .map((c) => {
+                  const iconSrc = sanitizeUrl(c.img, { allowRelative: true });
+                  return iconSrc
+                    ? `<img class="ksh-effect-icon" src="${escapeHtml(iconSrc)}" title="${escapeHtml(c.name)}" alt="${escapeHtml(c.name)}" />`
+                    : "";
+                })
                 .join("")}</div>`
             : "";
 
@@ -573,13 +587,15 @@ export class KorujaStreamHUD {
           .filter(Boolean)
           .join(" ");
 
+        const portraitSrc = sanitizeUrl(data.img, { allowRelative: true });
+
         return `
-          <div class="${stateClasses}" data-actor-id="${escapeHtml(actor.id)}" style="left:${coords.x}px; top:${coords.y}px;">
+          <div class="${stateClasses}" data-actor-id="${escapeHtml(actor.id)}" style="left:${Number(coords.x) || 0}px; top:${Number(coords.y) || 0}px;">
             ${isTurn ? `<div class="ksh-turn-badge">${escapeHtml(t("HUD.TurnBadge"))}</div>` : ""}
             ${toastHtml}
             <div class="ksh-card-header">
               <div class="ksh-portrait-wrap">
-                <img class="ksh-portrait" src="${escapeHtml(data.img)}" alt="${escapeHtml(data.name)}" />
+                ${portraitSrc ? `<img class="ksh-portrait" src="${escapeHtml(portraitSrc)}" alt="${escapeHtml(data.name)}" />` : ""}
                 ${data.isDead ? `<span class="ksh-dead-stamp">${escapeHtml(t("HUD.DeadLabel"))}</span>` : ""}
               </div>
               <div class="ksh-card-meta">
@@ -743,7 +759,7 @@ export class KorujaStreamHUD {
         : `<div class="ksh-empty-note">${escapeHtml(t("HUD.NoMessages"))}</div>`;
 
     return `
-      <div class="koruja-chat-feed-box" style="left:${pos.x}px; top:${pos.y}px;">
+      <div class="koruja-chat-feed-box" style="left:${Number(pos.x) || 0}px; top:${Number(pos.y) || 0}px;">
         <div class="ksh-widget-title">${escapeHtml(t("HUD.ChatFeedTitle"))}</div>
         <div class="ksh-chat-list">${itemsHtml}</div>
       </div>
@@ -752,9 +768,11 @@ export class KorujaStreamHUD {
 
   static #renderCombatBox(pos) {
     const combat = game.combat;
+    const posX = Number(pos.x) || 0;
+    const posY = Number(pos.y) || 0;
     if (!combat?.started) {
       return `
-        <div class="koruja-combat-box is-idle" style="left:${pos.x}px; top:${pos.y}px;">
+        <div class="koruja-combat-box is-idle" style="left:${posX}px; top:${posY}px;">
           <div class="ksh-widget-title">${escapeHtml(t("HUD.CombatTitle"))}</div>
           <div class="ksh-empty-note">${escapeHtml(t("HUD.NoCombat"))}</div>
         </div>
@@ -776,14 +794,16 @@ export class KorujaStreamHUD {
       }
     }
 
+    const currentImg = sanitizeUrl(current?.img, { allowRelative: true });
+
     return `
-      <div class="koruja-combat-box is-active" style="left:${pos.x}px; top:${pos.y}px;">
+      <div class="koruja-combat-box is-active" style="left:${posX}px; top:${posY}px;">
         <div class="ksh-combat-top">
           <span class="ksh-widget-title">${escapeHtml(t("HUD.CombatTitle"))}</span>
           <span class="ksh-round-pill">${escapeHtml(roundLabel)}</span>
         </div>
         <div class="ksh-combat-current">
-          ${current?.img ? `<img src="${escapeHtml(current.img)}" alt="${escapeHtml(current.name)}" />` : ""}
+          ${currentImg ? `<img src="${escapeHtml(currentImg)}" alt="${escapeHtml(current.name)}" />` : ""}
           <span>${escapeHtml(current?.name || "—")}</span>
         </div>
         ${nextName ? `<div class="ksh-combat-next">${escapeHtml(t("HUD.NextTurn", { name: nextName }))}</div>` : ""}
@@ -807,10 +827,11 @@ export class KorujaStreamHUD {
         ? t("Alerts.FumbleSubtitle", { actor: actorName })
         : t("Alerts.CritSubtitle", { actor: actorName }));
 
+    const epicImg = sanitizeUrl(data.actorImg || data.img, { allowRelative: true });
     const el = document.createElement("div");
     el.className = `koruja-epic-banner ${isFumble ? "is-fumble" : "is-crit"}`;
     el.innerHTML = `
-      ${data.actorImg || data.img ? `<img class="ksh-epic-img" src="${escapeHtml(data.actorImg || data.img)}" alt="" />` : ""}
+      ${epicImg ? `<img class="ksh-epic-img" src="${escapeHtml(epicImg)}" alt="" />` : ""}
       <div class="ksh-epic-copy">
         <div class="ksh-epic-title">${escapeHtml(title)}</div>
         <div class="ksh-epic-sub">${escapeHtml(subtitle)}</div>
@@ -820,11 +841,12 @@ export class KorujaStreamHUD {
     this.container.appendChild(el);
     this.epicBannerEl = el;
 
+    const duration = clampNumber(data.durationMs, 1000, 60000, 4500);
     this.epicBannerTimer = setTimeout(() => {
       el.classList.add("is-fading");
       setTimeout(() => el.remove(), 400);
       if (this.epicBannerEl === el) this.epicBannerEl = null;
-    }, 4500);
+    }, duration);
   }
 
   static showLocationBanner(data = {}) {
@@ -847,15 +869,17 @@ export class KorujaStreamHUD {
     this.container.appendChild(el);
     this.locationBannerEl = el;
 
+    const duration = clampNumber(data.durationMs, 1000, 60000, 5500);
     this.locationBannerTimer = setTimeout(() => {
       el.classList.add("is-fading");
       setTimeout(() => el.remove(), 450);
       if (this.locationBannerEl === el) this.locationBannerEl = null;
-    }, 5500);
+    }, duration);
   }
 
   static showSpotlight(data = {}) {
-    if (!this.shouldRender() || !data.img) return;
+    const spotlightImg = sanitizeUrl(data.img, { allowRelative: true });
+    if (!this.shouldRender() || !spotlightImg) return;
     if (!this.container) this.init();
     if (this.spotlightTimer) clearTimeout(this.spotlightTimer);
     this.spotlightEl?.remove();
@@ -865,14 +889,14 @@ export class KorujaStreamHUD {
     el.innerHTML = `
       <div class="ksh-spotlight-frame">
         <div class="ksh-spotlight-tag">${escapeHtml(t("HUD.HandoutLabel"))}</div>
-        <img src="${escapeHtml(data.img)}" alt="${escapeHtml(data.title || "")}" />
+        <img src="${escapeHtml(spotlightImg)}" alt="${escapeHtml(data.title || "")}" />
         ${data.title ? `<div class="ksh-spotlight-title">${escapeHtml(data.title)}</div>` : ""}
       </div>
     `;
     this.container.appendChild(el);
     this.spotlightEl = el;
 
-    const duration = Number(data.durationMs) || 12000;
+    const duration = clampNumber(data.durationMs, 1000, 60000, 12000);
     this.spotlightTimer = setTimeout(() => this.hideSpotlight(), duration);
   }
 

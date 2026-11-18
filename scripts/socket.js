@@ -3,7 +3,7 @@
  * for Koruja Stream HUD Universal.
  */
 
-import { BROADCAST_CHANNEL, MODULE_ID, SOCKET_NAME } from "./constants.js";
+import { BROADCAST_CHANNEL, clampNumber, MODULE_ID, sanitizeUrl, SOCKET_NAME } from "./constants.js";
 
 export const SOCKET_EVENTS = Object.freeze([
   "epic-banner",
@@ -13,17 +13,50 @@ export const SOCKET_EVENTS = Object.freeze([
   "state-override"
 ]);
 
+const MAX_STRING_LEN = 300;
+const URL_FIELDS = new Set(["img", "actorImg", "url"]);
+const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 let channel = null;
 let socketRegistered = false;
 let activeHandlers = {};
 
+function isPlainObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function sanitizePayload(payload) {
+  const clean = {};
+  for (const [key, val] of Object.entries(payload)) {
+    if (FORBIDDEN_KEYS.has(key) || val === undefined) continue;
+    if (URL_FIELDS.has(key)) {
+      clean[key] = sanitizeUrl(val, { allowRelative: true });
+    } else if (key === "durationMs") {
+      clean.durationMs = clampNumber(val, 1000, 60000, 4000);
+    } else if (typeof val === "string") {
+      clean[key] = val.slice(0, MAX_STRING_LEN);
+    } else if (typeof val === "number") {
+      if (Number.isFinite(val)) clean[key] = val;
+    } else if (typeof val === "boolean" || val === null) {
+      clean[key] = val;
+    }
+  }
+  return clean;
+}
+
 function dispatchEvent(message) {
-  if (!message || typeof message !== "object") return;
+  if (!isPlainObject(message)) return;
   const { type, payload } = message;
   if (!SOCKET_EVENTS.includes(type)) return;
+  if (!isPlainObject(payload)) return;
+
+  const safePayload = sanitizePayload(payload);
+  const safeMessage = { ...message, payload: safePayload };
 
   if (typeof activeHandlers.onEvent === "function") {
-    activeHandlers.onEvent(type, payload, message);
+    activeHandlers.onEvent(type, safePayload, safeMessage);
   }
 
   const handlerMap = {
@@ -36,7 +69,7 @@ function dispatchEvent(message) {
 
   const fn = handlerMap[type];
   if (typeof fn === "function") {
-    fn(payload, message);
+    fn(safePayload, safeMessage);
   }
 }
 
@@ -55,7 +88,8 @@ export function initSocketBridge(handlers = {}) {
   activeHandlers = handlers || {};
 
   if (!socketRegistered && game?.socket) {
-    game.socket.on(SOCKET_NAME, (message) => {
+    game.socket.on(SOCKET_NAME, (message, userId) => {
+      if (!game.users?.get(userId)?.isGM) return;
       dispatchEvent(message);
     });
     socketRegistered = true;

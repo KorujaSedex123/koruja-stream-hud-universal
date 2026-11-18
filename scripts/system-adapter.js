@@ -260,15 +260,37 @@ function clonePreset(preset) {
   return JSON.parse(JSON.stringify(preset));
 }
 
+function isPlainObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function stripForbiddenKeys(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripForbiddenKeys(item));
+  }
+  if (!isPlainObject(value)) {
+    return value;
+  }
+  const clean = {};
+  for (const [key, val] of Object.entries(value)) {
+    if (FORBIDDEN_SEGMENTS.has(key) || val === undefined) continue;
+    clean[key] = stripForbiddenKeys(val);
+  }
+  return clean;
+}
+
 function mergeMappings(base, override) {
-  if (!override || typeof override !== "object") return clonePreset(base);
   const merged = clonePreset(base);
+  if (!isPlainObject(override)) return merged;
+
   for (const [key, val] of Object.entries(override)) {
-    if (FORBIDDEN_SEGMENTS.has(key)) continue;
-    if (val && typeof val === "object" && !Array.isArray(val) && merged[key] && typeof merged[key] === "object") {
-      merged[key] = { ...merged[key], ...val };
-    } else if (val !== undefined) {
-      merged[key] = val;
+    if (FORBIDDEN_SEGMENTS.has(key) || val === undefined) continue;
+    if (isPlainObject(val) && isPlainObject(merged[key])) {
+      merged[key] = mergeMappings(merged[key], val);
+    } else {
+      merged[key] = stripForbiddenKeys(val);
     }
   }
   return merged;

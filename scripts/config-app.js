@@ -4,7 +4,8 @@ import {
   THEMES,
   OVERLAY_MODES,
   DEFAULT_POSITIONS,
-  escapeHtml
+  escapeHtml,
+  sanitizeUrl
 } from "./constants.js";
 import {
   PRESET_IDS,
@@ -18,6 +19,15 @@ import {
 } from "./settings.js";
 import { emitHudEvent } from "./socket.js";
 import { KorujaStreamHUD } from "./hud-renderer.js";
+
+/**
+ * Check whether a parsed JSON value is a plain non-array object.
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
 /**
  * Localize an i18n key under KORUJA_HUD.
@@ -184,7 +194,7 @@ export class StreamPartyConfigApp extends foundry.applications.api.ApplicationV2
                 <div class="ksh-actor-card">
                   <label class="ksh-actor-row">
                     <input type="checkbox" name="actor_${escapeHtml(actor.id)}" value="${escapeHtml(actor.id)}" ${checked} />
-                    <img src="${escapeHtml(actor.img)}" alt="${escapeHtml(actor.name)}" />
+                    <img src="${escapeHtml(sanitizeUrl(actor.img, { allowRelative: true }))}" alt="${escapeHtml(actor.name)}" />
                     <div class="ksh-actor-meta">
                       <strong>${escapeHtml(actor.name)}</strong>
                       <span>${escapeHtml(actor.type)}</span>
@@ -480,7 +490,10 @@ export class StreamPartyConfigApp extends foundry.applications.api.ApplicationV2
         return;
       }
       try {
-        JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        if (!isPlainObject(parsed)) {
+          throw new Error("Mapping JSON must be a plain object");
+        }
         jsonStatus.textContent = t("Config.MappingValid");
         jsonStatus.className = "ksh-json-status is-valid";
       } catch {
@@ -508,7 +521,12 @@ export class StreamPartyConfigApp extends foundry.applications.api.ApplicationV2
       const rawJson = jsonTextarea?.value?.trim();
       if (preset === "custom" && rawJson) {
         try {
-          override = JSON.parse(rawJson);
+          const parsed = JSON.parse(rawJson);
+          if (!isPlainObject(parsed)) {
+            ui.notifications?.error(t("Notifications.InvalidJsonNotice"));
+            return;
+          }
+          override = parsed;
         } catch {
           ui.notifications?.error(t("Notifications.InvalidJsonNotice"));
           return;
@@ -643,7 +661,11 @@ export class StreamPartyConfigApp extends foundry.applications.api.ApplicationV2
     const customJson = String(data.customMappingJson || "").trim();
     if (data.systemPreset === "custom" && customJson) {
       try {
-        JSON.parse(customJson);
+        const parsed = JSON.parse(customJson);
+        if (!isPlainObject(parsed)) {
+          ui.notifications?.error(t("Notifications.InvalidJsonNotice"));
+          return;
+        }
       } catch {
         ui.notifications?.error(t("Notifications.InvalidJsonNotice"));
         return;
@@ -660,7 +682,9 @@ export class StreamPartyConfigApp extends foundry.applications.api.ApplicationV2
         selected.push({ id, order });
       }
       const mode = data[`slotMode_${id}`];
-      const url = String(data[`slotUrl_${id}`] || "").trim();
+      const url = sanitizeUrl(String(data[`slotUrl_${id}`] || "").trim(), {
+        allowRelative: false
+      });
       if (mode) {
         slotConfigs[id] = { mode, url };
       }
@@ -676,7 +700,12 @@ export class StreamPartyConfigApp extends foundry.applications.api.ApplicationV2
       setSetting("customMappingJson", customJson),
       setSetting("theme", data.theme || "fantasy"),
       setSetting("overlayMode", data.overlayMode || "builtin-tactical"),
-      setSetting("customOverlayImg", String(data.customOverlayImg || "").trim()),
+      setSetting(
+        "customOverlayImg",
+        sanitizeUrl(String(data.customOverlayImg || "").trim(), {
+          allowRelative: true
+        })
+      ),
       setSetting("campaignTitle", String(data.campaignTitle || "").trim()),
       setSetting("campaignSubtitle", String(data.campaignSubtitle || "").trim()),
       setSetting("customQuestText", String(data.customQuestText || "").trim()),

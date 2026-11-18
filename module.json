@@ -2,7 +2,7 @@
   "id": "koruja-stream-hud-universal",
   "title": "Koruja Stream HUD — Universal Stream Overlay",
   "description": "System-agnostic, lightweight, 100% native Foundry VTT stream overlay for OBS Studio. Supports any RPG system via built-in presets (D&D 5e, PF2e, Delta Green, Call of Cthulhu 7e, Tormenta20, SWADE, Generic) and custom dot-path mapping, with 3 visual themes, VDO.Ninja webcams, boss HP bars, roll alerts, combat tracker, and public API.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "library": false,
   "compatibility": {
     "minimum": "12",
@@ -34,7 +34,7 @@
   ],
   "url": "https://github.com/KorujaSedex123/koruja-stream-hud-universal",
   "manifest": "https://github.com/KorujaSedex123/koruja-stream-hud-universal/releases/latest/download/module.json",
-  "download": "https://github.com/KorujaSedex123/koruja-stream-hud-universal/releases/download/v1.0.0/module.zip",
+  "download": "https://github.com/KorujaSedex123/koruja-stream-hud-universal/releases/download/v1.0.1/module.zip",
   "readme": "README.md",
   "license": "LICENSE",
   "bugs": "https://github.com/KorujaSedex123/koruja-stream-hud-universal/issues",

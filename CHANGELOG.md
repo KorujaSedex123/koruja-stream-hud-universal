@@ -5,6 +5,18 @@ All notable changes to **Koruja Stream HUD — Universal Stream Overlay** will b
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-11-18
+
+### Security & Hardening
+- Gated `game.korujaStreamHud.showLocation` and `game.korujaStreamHud.triggerBanner` behind GM-only checks (`if (!game.user?.isGM) return;`).
+- Replaced raw `innerHTML` interpolation in `renderActorDirectory` action buttons with safe DOM node construction (`document.createElement` + `document.createTextNode`).
+- Hardened socket/chat/HTML rendering, URL validation, and custom mapping sanitization.
+
+### CI/CD
+- Eliminated GitHub Actions script injection in `.github/workflows/release.yml` by passing `TAG`, `CLEAN_VERSION`, `REPO`, and dispatch inputs through `env:` (`process.env.*`).
+- Added `workflow_dispatch` (with optional `tag` input) alongside `push: tags: ['v*']`, with a `concurrency` group and `permissions: contents: write`.
+- Added JS syntax validation (`node --input-type=module --check`) in CI alongside JSON manifest/localization validation before packaging `module.zip`.
+
 ## [1.0.0] - 2026-11-18
 
 ### Added

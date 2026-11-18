@@ -53,6 +53,66 @@ export function escapeHtml(str) {
 }
 
 /**
+ * Sanitizes a URL string to prevent javascript:/data:/vbscript: and similar injection vectors.
+ * When allowRelative is true, permits same-origin relative paths and http:/https: URLs.
+ * When allowRelative is false, permits only URLs matching allowedProtocols (default ["https:"]).
+ * @param {unknown} url
+ * @param {{ allowRelative?: boolean, allowedProtocols?: string[] }} [options={}]
+ * @returns {string}
+ */
+export function sanitizeUrl(url, { allowRelative = false, allowedProtocols = ["https:"] } = {}) {
+  if (typeof url !== "string") return "";
+  const trimmed = url.trim();
+  if (!trimmed || /[\u0000-\u001F\u007F]/.test(trimmed)) return "";
+
+  const origin =
+    typeof window !== "undefined" && window.location?.origin && window.location.origin !== "null"
+      ? window.location.origin
+      : "https://foundry.local";
+
+  try {
+    if (!allowRelative) {
+      const parsed = new URL(trimmed);
+      const allowed = new Set(allowedProtocols.map((p) => String(p).toLowerCase()));
+      return allowed.has(parsed.protocol.toLowerCase()) ? parsed.href : "";
+    }
+
+    if (trimmed.startsWith("//")) return "";
+
+    const parsed = new URL(trimmed, origin);
+    const proto = parsed.protocol.toLowerCase();
+    if (proto !== "http:" && proto !== "https:") return "";
+
+    const hasExplicitScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed);
+    if (hasExplicitScheme) {
+      return parsed.href;
+    }
+    return parsed.origin === origin ? trimmed : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Clamps a numeric value into [min, max], returning fallback if non-finite.
+ * @param {unknown} value
+ * @param {number} min
+ * @param {number} max
+ * @param {number} fallback
+ * @returns {number}
+ */
+export function clampNumber(value, min, max, fallback) {
+  const num =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== ""
+        ? Number(value)
+        : NaN;
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(max, Math.max(min, num));
+}
+
+/**
  * Normalizes an arbitrary string into a URL-safe slug.
  * @param {string} name
  * @param {string} [fallback="player"]

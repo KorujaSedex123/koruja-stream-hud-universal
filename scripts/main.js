@@ -173,6 +173,7 @@ function registerPublicApi() {
     },
 
     showLocation: (title, subtitle = "") => {
+      if (!game.user?.isGM) return;
       const payload = {
         title: String(title || ""),
         subtitle: String(subtitle || "")
@@ -181,6 +182,7 @@ function registerPublicApi() {
     },
 
     triggerBanner: (type = "crit", data = {}) => {
+      if (!game.user?.isGM) return;
       const normalizedType = type === "fumble" ? "fumble" : "crit";
       emitHudEvent(
         "epic-banner",
@@ -276,7 +278,9 @@ Hooks.on("renderActorDirectory", (_app, html) => {
   configBtn.type = "button";
   configBtn.className = "koruja-hud-dir-btn";
   configBtn.style.flex = "1";
-  configBtn.innerHTML = `<i class="fas fa-tv"></i> ${t("ButtonLabel")}`;
+  const configIcon = document.createElement("i");
+  configIcon.className = "fas fa-tv";
+  configBtn.append(configIcon, document.createTextNode(` ${t("ButtonLabel")}`));
   configBtn.addEventListener("click", (ev) => {
     ev.preventDefault();
     openConfigApp();
@@ -286,7 +290,9 @@ Hooks.on("renderActorDirectory", (_app, html) => {
   modeBtn.type = "button";
   modeBtn.className = "koruja-hud-mode-btn";
   modeBtn.style.flex = "1";
-  modeBtn.innerHTML = `<i class="fas fa-theater-masks"></i> ${t("ModeToggleButton")}`;
+  const modeIcon = document.createElement("i");
+  modeIcon.className = "fas fa-theater-masks";
+  modeBtn.append(modeIcon, document.createTextNode(` ${t("ModeToggleButton")}`));
   modeBtn.addEventListener("click", async (ev) => {
     ev.preventDefault();
     const current = getOverlayMode();
