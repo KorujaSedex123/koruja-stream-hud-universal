@@ -1,0 +1,21 @@
+# Build & Release Packages
+module.zip
+*.zip
+dist/
+node_modules/
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Logs & Environment
+npm-debug.log*
+yarn-debug.log*
+.env
